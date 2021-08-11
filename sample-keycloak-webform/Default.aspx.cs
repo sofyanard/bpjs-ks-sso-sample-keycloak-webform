@@ -18,10 +18,14 @@ namespace sample_keycloak_webform
 
         protected void Button1_Click(object sender, EventArgs e)
         {
+            // redirect page after authenticated
+            string authenticatedPage = System.Configuration.ConfigurationManager.AppSettings["authenticatedUri"];
+
             if (!Request.IsAuthenticated)
             {
                 HttpContext.Current.GetOwinContext().Authentication.Challenge(
-                new AuthenticationProperties { RedirectUri = "/Home.aspx" },
+                // new AuthenticationProperties { RedirectUri = "/" },
+                new AuthenticationProperties { RedirectUri = authenticatedPage },
                 OpenIdConnectAuthenticationDefaults.AuthenticationType);
             }
             else
