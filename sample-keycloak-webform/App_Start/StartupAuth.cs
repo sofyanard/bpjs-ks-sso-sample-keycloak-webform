@@ -8,6 +8,9 @@ using Microsoft.Owin.Security.Notifications;
 using Owin;
 using System;
 using System.Threading.Tasks;
+using Microsoft.Owin.Host.SystemWeb;
+using Microsoft.Owin.Infrastructure;
+using System.IdentityModel.Tokens.Jwt;
 
 [assembly: OwinStartup(typeof(sample_keycloak_webform.App_Start.StartupAuth))]
 
@@ -30,6 +33,8 @@ namespace sample_keycloak_webform.App_Start
         static string _authority = String.Format(System.Globalization.CultureInfo.InvariantCulture, System.Configuration.ConfigurationManager.AppSettings["authority"], _tenant);
 
         static string _metadataAddress = _authority + "/.well-known/openid-configuration";
+
+        string authenticatedPage = System.Configuration.ConfigurationManager.AppSettings["authenticatedUri"];
 
         public void Configuration(IAppBuilder app)
         {
@@ -91,10 +96,24 @@ namespace sample_keycloak_webform.App_Start
                     */
 
                     AuthenticationFailed = OnAuthenticationFailed
+                    /*
+                    AuthenticationFailed = (context) => 
+                    {
+                        if (context.Exception.Message.Contains("IDX21323"))
+                        {
+                            context.HandleResponse();
+                            context.OwinContext.Authentication.Challenge();
+                        }
+
+                        Task.FromResult(true);
+                    }
+                    */
                 },
+
                 // Disable Https for Development
                 RequireHttpsMetadata = false,
-                MetadataAddress = _metadataAddress
+                MetadataAddress = _metadataAddress,
+                ProtocolValidator = new CustomOpenIdConnectProtocolValidator(false)
             });
         }
 
@@ -104,6 +123,57 @@ namespace sample_keycloak_webform.App_Start
             context.HandleResponse();
             context.Response.Redirect("/?errormessage=" + context.Exception.Message);
             return Task.FromResult(0);
+
+            /*
+            try
+            {
+                return ErrorHandling(context);
+            }
+            catch (Exception)
+            {
+                context.HandleResponse();
+                // context.OwinContext.Authentication.Challenge();
+                context.OwinContext.Authentication.Challenge(
+                // new AuthenticationProperties { RedirectUri = "/" },
+                new AuthenticationProperties { RedirectUri = authenticatedPage },
+                OpenIdConnectAuthenticationDefaults.AuthenticationType);
+
+                return Task.FromResult(0);
+            }
+            */
         }
+
+        /*
+        private Task ErrorHandling(AuthenticationFailedNotification<OpenIdConnectMessage, OpenIdConnectAuthenticationOptions> context)
+        {
+            if (context.Exception.Message.Contains("IDX21323"))
+            {
+                throw new Exception();
+            }
+
+            context.HandleResponse();
+            context.Response.Redirect("/?errormessage=" + context.Exception.Message);
+            return Task.FromResult(0);
+        }
+        */
+
+    }
+
+    public class CustomOpenIdConnectProtocolValidator : OpenIdConnectProtocolValidator
+    {
+        public CustomOpenIdConnectProtocolValidator(bool shouldValidateNonce)
+        {
+            this.ShouldValidateNonce = shouldValidateNonce;
+            this.RequireStateValidation = false;
+        }
+        protected override void ValidateNonce(OpenIdConnectProtocolValidationContext validationContext)
+        {
+            if (this.ShouldValidateNonce)
+            {
+                base.ValidateNonce(validationContext);
+            }
+        }
+
+        private bool ShouldValidateNonce { get; set; }
     }
 }
